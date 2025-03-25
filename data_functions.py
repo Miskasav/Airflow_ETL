@@ -9,17 +9,27 @@ def fetch_stock_data():
     #List of stock symbols that are fetched from API. Maybe later do it more dynamically?
     stock_symbol_list = ["MSFT", "GOOGL", "NET", "META", "ORCL", "NFLX", "SAP", "CRM", "IBM", "ACN", "PLTR", "NOW", "ADBE", "INTU", "SHOP", "PANW", "ADP", "SPOT", "APP", "CRWD"]
     
-    #Get secret API key from file
-    API_key = ""
+    #Get secret alphavintage API key from file
+    API_key_alpha_vintage = ""
     with open("./secrets/API.txt", "r") as API_file:
-       API_key = (API_file.readline().strip())
+       API_key_alpha_vintage = (API_file.readline().strip())
+
+    API_key_API_ninja = ""
+    with open("./secrets/API_ninja_API_key", "r") as API_file:
+       API_key_API_ninja = (API_file.readline().strip())
 
     #Create json from each symbol history
     for symbol in stock_symbol_list:
-        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize=full&apikey={API_key}'
+        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize=full&apikey={API_key_alpha_vintage}'
         r = requests.get(url)
         data = r.json()
         with open(f"./stock_data/stock_data_{symbol}.json", "w") as json_file:
+            json.dump(data, json_file, indent=4)
+
+        url = f"https://api.api-ninjas.com/v1/marketcap?ticker={symbol}"
+        r = requests.get(url, headers={'X-Api-Key': API_key_API_ninja})
+        data = r.json()
+        with open(f"./stock_data/stock_data_MC_{symbol}.json", "w") as json_file:
             json.dump(data, json_file, indent=4)
 
 
@@ -74,13 +84,15 @@ def transform_and_update_stock_price_table():
                                         )
                             new_rows_price_history += 1
 
-                        #Updating some values in stock_company table    
+                        #Updating some values in stock_company table
+                        with open(f"./stock_data/stock_data_MC_{symbol[0].strip()}.json", "r") as json_file:
+                            data = json.load(json_file)    
                         current_price_date = df.iloc[0]["date"]
                         current_price = float(df.iloc[0]["price_close"])
                         cur.execute('''
-                                    UPDATE stock_company SET current_price = %s, current_price_date = %s where symbol = %s;
+                                    UPDATE stock_company SET current_price = %s, current_price_date = %s, market_cap = %s where symbol = %s;
                                     ''',
-                                    (current_price, current_price_date, symbol[0])
+                                    (current_price, current_price_date, data["market_cap"], symbol[0])
                                     )
 
                 #For debugging purposes to show how many rows have been updated or created        
@@ -99,5 +111,5 @@ def transform_and_update_stock_price_table():
         print(f"Database connection error: {e}")
 
 if __name__ == "__main__":
-    # fetch_stock_data()
-    transform_and_update_stock_price_table()
+    fetch_stock_data()
+    # transform_and_update_stock_price_table()

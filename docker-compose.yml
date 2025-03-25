@@ -1,32 +1,16 @@
 x-airflow-common:
   &airflow-common
-  # In order to add custom dependencies or upgrade provider packages you can use your extended image.
-  # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
-  # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
   image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.5}
-  # build: .
   environment:
     &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${CONNECTION_STRING}
-    AIRFLOW__CORE__FERNET_KEY_FILE: ${FERNET_KEY}
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__TEST_CONNECTION: 'Enabled'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-    # yamllint disable rule:line-length
-    # Use simple http server on scheduler for health checks
-    # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
-    # yamllint enable rule:line-length
-    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    AIRFLOW_CONN_MY_POSTGRES: ${POSTGRES_CONNECTION_STRING}
-    # The following line can be used to set a custom config file, stored in the local config folder
-    # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
-    # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    AIRFLOW_CONN_MY_POSTGRES_CONN: ${POSTGRES_CONNECTION_STRING}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${CONNECTION_STRING}
+    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
-    - ./config:/opt/airflow/config
+    - ./config/airflow.cfg:/opt/airflow/config/airflow.cfg
     - ./plugins:/opt/airflow/plugins
     - ./stock_data:/opt/airflow/data
   user: "${AIRFLOW_UID:-50000}:0"
@@ -36,10 +20,12 @@ x-airflow-common:
       condition: service_healthy
   secrets:
     - API_key
+    - API_key_API_ninja
+    - SQL_alchemy_conn
 
 services:
   postgres:
-    image: postgres:13
+    image: postgres:latest
     container_name: postgresql
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -47,6 +33,7 @@ services:
       POSTGRES_DB: miskasav
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "miskasav"]
       interval: 10s
@@ -69,8 +56,6 @@ services:
       retries: 5
       start_period: 30s
     restart: always
-    volumes:
-      - ./config/airflow.cfg:/opt/airflow/airflow.cfg
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -91,12 +76,11 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-    
 
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
-    # yamllint disable rule:line-length
+    container_name: airflow_init
     command:
       - -c
       - |
@@ -112,6 +96,8 @@ services:
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
+        
+    # yamllint disable rule:line-length
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -131,3 +117,7 @@ volumes:
 secrets:
   API_key:
     file: secrets/API.txt
+  API_key_API_ninja:
+    file: secrets/API_ninja_API_key.txt
+  SQL_alchemy_conn:
+    file: secrets/sql_alchemy_conn.txt
