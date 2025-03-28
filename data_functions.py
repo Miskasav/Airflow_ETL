@@ -15,7 +15,7 @@ def fetch_stock_data():
        API_key_alpha_vintage = (API_file.readline().strip())
 
     API_key_API_ninja = ""
-    with open("./secrets/API_ninja_API_key", "r") as API_file:
+    with open("./secrets/API_ninja_API_key.txt", "r") as API_file:
        API_key_API_ninja = (API_file.readline().strip())
 
     #Create json from each symbol history
@@ -111,5 +111,5 @@ def transform_and_update_stock_price_table():
         print(f"Database connection error: {e}")
 
 if __name__ == "__main__":
-    fetch_stock_data()
-    # transform_and_update_stock_price_table()
+    #fetch_stock_data()
+    transform_and_update_stock_price_table()

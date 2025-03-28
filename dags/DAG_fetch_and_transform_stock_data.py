@@ -155,11 +155,11 @@ def transform_and_update_stock_price_table():
         #Simple error message to describe the issue
         print(f"Database connection error: {e}")
 
-# fetch_stock_data_task = PythonOperator(
-#     task_id='fetch_stock_data_task',
-#     python_callable=fetch_stock_data,
-#     dag=dag,
-# )
+fetch_stock_data_task = PythonOperator(
+    task_id='fetch_stock_data_task',
+    python_callable=fetch_stock_data,
+    dag=dag,
+)
 
 transform_and_update_stock_price_table_task = PythonOperator(
     task_id='transform_and_update_stock_price_table',
@@ -173,4 +173,4 @@ transform_and_update_stock_price_table_task = PythonOperator(
 #     dag=dag,
 # )
 
-transform_and_update_stock_price_table_task
+fetch_stock_data_task >>transform_and_update_stock_price_table_task
