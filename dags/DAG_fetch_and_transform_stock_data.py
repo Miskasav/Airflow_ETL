@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 import logging
 import requests
 import json
@@ -167,10 +168,63 @@ transform_and_update_stock_price_table_task = PythonOperator(
     dag=dag,
 )
 
+create_sma_task = SQLExecuteQueryOperator(
+    task_id = "create_sma",
+    conn_id="my_postgres_conn",
+    sql="""
+        UPDATE stock_price_history AS s
+	    SET sma30 = fd.sma30,
+	        sma60 = fd.sma60,
+		    crossover_signal = fd.crossover_signal
+        FROM full_detail as fd
+        WHERE s.company_id = fd.company_id
+        AND s.price_date = fd.price_date;
+        """,
+    autocommit=True,
+    dag=dag
+)
+
+create_golden_cross_task = SQLExecuteQueryOperator(
+    task_id = "create_golden_cross",
+    conn_id="my_postgres_conn",
+    sql="""
+        UPDATE stock_price_history AS s
+        SET golden_cross_start_price = pcg.golden_price,
+            golden_cross_end_price = pcg.death_price,
+            golden_cross_end_date = pcg.death_date,
+            golden_cross_price_change = pcg.price_change,
+            golden_cross_price_change_percentage = pcg.percent_change
+        FROM price_changes_golden as pcg
+        WHERE s.company_id = pcg.company_id
+        AND s.price_date = pcg.golden_date;
+        """,
+    autocommit=True,
+    dag=dag
+)
+
+create_death_cross_task = SQLExecuteQueryOperator(
+    task_id = "create_death_cross",
+    conn_id="my_postgres_conn",
+    sql="""
+        UPDATE stock_price_history AS s
+        SET death_cross_start_price = pcg.death_price,
+            death_cross_end_price = pcg.golden_price,
+            death_cross_end_date = pcg.golden_date,
+            death_cross_price_change = pcg.price_change,
+            death_cross_price_change_percentage = pcg.percent_change
+        FROM price_changes_death as pcg
+        WHERE s.company_id = pcg.company_id
+        AND s.price_date = pcg.death_date;
+        """,
+    autocommit=True,
+    dag=dag
+)
+
 # test_task = PythonOperator(
 #     task_id='test',
 #     python_callable=fetch_postgres_connection_details,
 #     dag=dag,
 # )
 
-fetch_stock_data_task >>transform_and_update_stock_price_table_task
+fetch_stock_data_task >>transform_and_update_stock_price_table_task >> create_sma_task >> create_golden_cross_task >> create_death_cross_task
+# create_sma_task >> create_golden_cross_task >> create_death_cross_task
