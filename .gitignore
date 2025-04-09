@@ -29,6 +29,10 @@ MANIFEST
 #Custom
 secrets/
 logs/
+stock_data/
+config/
+nginx/
+airflow_init.sh
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
